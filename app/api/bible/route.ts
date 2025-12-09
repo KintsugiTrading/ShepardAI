@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json()
 
-    const result = streamText({
+    const result = await streamText({
       model: google("gemini-1.5-flash"),
       system: `You are a biblical scholar and theologian with expertise in:
       - Hebrew and Greek biblical languages
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     return result.toDataStreamResponse()
   } catch (error) {
     console.error("Bible API Error:", error)
-    return new Response(JSON.stringify({ error: "Failed to generate response" }), {
+    return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     })
