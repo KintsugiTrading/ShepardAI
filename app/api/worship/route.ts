@@ -6,7 +6,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json()
 
     const { text } = await generateText({
-      model: google("gemini-1.5-flash-latest"),
+      model: google("models/gemini-pro"),
       system: `You are an experienced worship leader and music director with extensive knowledge 
       of Christian worship music across all genres - contemporary, traditional hymns, gospel, 
       and more. You understand worship flow, congregational engagement, and how to build 
