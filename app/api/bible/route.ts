@@ -6,7 +6,7 @@ export async function POST(req: Request) {
     const { messages } = await req.json()
 
     const { text } = await generateText({
-      model: google("models/gemini-pro"),
+      model: google("gemini-2.0-flash"),
       system: `You are a biblical scholar and theologian with expertise in:
       - Hebrew and Greek biblical languages
       - Historical and cultural context of Scripture
