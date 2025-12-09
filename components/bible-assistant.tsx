@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect } from "react"
+import { useState, useRef, useEffect, FormEvent } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,8 @@ const suggestedQuestions = [
 ]
 
 export function BibleAssistant() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput } = useChat({
+  const [inputValue, setInputValue] = useState("")
+  const { messages, append, isLoading } = useChat({
     api: "/api/bible",
     initialMessages: [
       {
@@ -36,12 +37,15 @@ export function BibleAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!inputValue.trim() || isLoading) return
+    append({ role: "user", content: inputValue })
+    setInputValue("")
+  }
+
   const askQuestion = (question: string) => {
-    setInput(question)
-    setTimeout(() => {
-      const form = document.getElementById("chat-form") as HTMLFormElement
-      if (form) form.requestSubmit()
-    }, 100)
+    append({ role: "user", content: question })
   }
 
   return (
@@ -112,16 +116,16 @@ export function BibleAssistant() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <form id="chat-form" onSubmit={handleSubmit} className="p-4 border-t border-border">
+                <form onSubmit={handleSubmit} className="p-4 border-t border-border">
                   <div className="flex gap-2">
                     <Input
-                      value={input || ""}
-                      onChange={handleInputChange}
+                      value={inputValue}
+                      onChange={(e) => setInputValue(e.target.value)}
                       placeholder="Ask about Scripture, context, or theology..."
                       disabled={isLoading}
                       className="flex-1"
                     />
-                    <Button type="submit" disabled={isLoading || !input?.trim()}>
+                    <Button type="submit" disabled={isLoading || !inputValue.trim()}>
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>
