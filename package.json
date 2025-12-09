@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/google": "latest",
     "@ai-sdk/react": "latest",
     "@glowstudent/youversion": "2.2.2",
     "@hookform/resolvers": "^3.10.0",

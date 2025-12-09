@@ -1,10 +1,11 @@
+import { google } from "@ai-sdk/google"
 import { streamText } from "ai"
 
 export async function POST(req: Request) {
   const { messages } = await req.json()
 
   const result = streamText({
-    model: "anthropic/claude-sonnet-4-20250514",
+    model: google("gemini-1.5-flash"),
     system: `You are a biblical scholar and theologian with expertise in:
     - Hebrew and Greek biblical languages
     - Historical and cultural context of Scripture
@@ -18,5 +19,5 @@ export async function POST(req: Request) {
     messages,
   })
 
-  return result.toUIMessageStreamResponse()
+  return result.toDataStreamResponse()
 }
