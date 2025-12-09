@@ -38,13 +38,10 @@ const VOTD_VERSES = [
   "John 14:6",
 ]
 
-function getVerseOfTheDayReference(): string {
-  // Use the day of the year to rotate through verses
-  const now = new Date()
-  const start = new Date(now.getFullYear(), 0, 0)
-  const diff = now.getTime() - start.getTime()
-  const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24))
-  return VOTD_VERSES[dayOfYear % VOTD_VERSES.length]
+function getRandomVerseReference(): string {
+  // Return a random verse from the list
+  const randomIndex = Math.floor(Math.random() * VOTD_VERSES.length)
+  return VOTD_VERSES[randomIndex]
 }
 
 export async function GET(req: Request) {
@@ -58,7 +55,7 @@ export async function GET(req: Request) {
   try {
     // Get verse of the day
     if (votd === "true") {
-      const reference = getVerseOfTheDayReference()
+      const reference = getRandomVerseReference()
       const response = await fetch(`${BIBLE_API_BASE}/${encodeURIComponent(reference)}?translation=${version}`)
 
       if (!response.ok) {
