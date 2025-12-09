@@ -5,10 +5,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useChat } from "@ai-sdk/react"
-import { Send, BookOpen, Sparkles, User, Search } from "lucide-react"
+import { Send, BookOpen, Sparkles, User, Search, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { VerseLookup } from "./verse-lookup"
+
+interface Message {
+  id: string
+  role: "user" | "assistant"
+  content: string
+}
 
 const suggestedQuestions = [
   "What is the historical context of Romans 8?",
@@ -19,17 +24,14 @@ const suggestedQuestions = [
 
 export function BibleAssistant() {
   const [inputValue, setInputValue] = useState("")
-  const { messages, append, isLoading } = useChat({
-    api: "/api/bible",
-    initialMessages: [
-      {
-        id: "welcome",
-        role: "assistant",
-        content:
-          "Hello! I'm your Bible study assistant. I can help you explore Scripture, understand historical context, compare translations, and prepare for teaching. What would you like to explore today?",
-      },
-    ],
-  })
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "Hello! I'm your Bible study assistant. I can help you explore Scripture, understand historical context, compare translations, and prepare for teaching. What would you like to explore today?",
+    },
+  ])
+  const [isLoading, setIsLoading] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -37,15 +39,90 @@ export function BibleAssistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
+  const sendMessage = async (content: string) => {
+    if (!content.trim() || isLoading) return
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: content.trim(),
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInputValue("")
+    setIsLoading(true)
+
+    try {
+      const response = await fetch("/api/bible", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let result = ""
+      const assistantMessageId = (Date.now() + 1).toString()
+
+      // Add empty assistant message that we'll update
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantMessageId, role: "assistant", content: "" },
+      ])
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              const content = line.slice(2).trim()
+              if (content.startsWith('"') && content.endsWith('"')) {
+                result += JSON.parse(content)
+              }
+            }
+          }
+          // Update the assistant message with streamed content
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId ? { ...m, content: result } : m
+            )
+          )
+        }
+      }
+    } catch (err) {
+      console.error("Bible assistant error:", err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Sorry, I encountered an error. Please check your API key and try again.",
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (!inputValue.trim() || isLoading) return
-    append({ role: "user", content: inputValue })
-    setInputValue("")
+    sendMessage(inputValue)
   }
 
   const askQuestion = (question: string) => {
-    append({ role: "user", content: question })
+    sendMessage(question)
   }
 
   return (
@@ -99,7 +176,7 @@ export function BibleAssistant() {
                       )}
                     </div>
                   ))}
-                  {isLoading && (
+                  {isLoading && messages[messages.length - 1]?.role === "user" && (
                     <div className="flex gap-3">
                       <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
                         <BookOpen className="w-4 h-4 text-primary-foreground" />
@@ -126,7 +203,11 @@ export function BibleAssistant() {
                       className="flex-1"
                     />
                     <Button type="submit" disabled={isLoading || !inputValue.trim()}>
-                      <Send className="w-4 h-4" />
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                 </form>
@@ -148,6 +229,7 @@ export function BibleAssistant() {
                     variant="outline"
                     className="w-full text-left justify-start h-auto py-3 px-4 bg-transparent"
                     onClick={() => askQuestion(question)}
+                    disabled={isLoading}
                   >
                     <span className="text-sm leading-snug">{question}</span>
                   </Button>

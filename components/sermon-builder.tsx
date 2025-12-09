@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useChat } from "@ai-sdk/react"
 import { Loader2, Copy, Download, Sparkles } from "lucide-react"
 
 export function SermonBuilder() {
@@ -15,12 +14,16 @@ export function SermonBuilder() {
   const [theme, setTheme] = useState("")
   const [audience, setAudience] = useState("general")
   const [duration, setDuration] = useState("30")
+  const [isLoading, setIsLoading] = useState(false)
+  const [generatedSermon, setGeneratedSermon] = useState("")
+  const [error, setError] = useState("")
 
-  const { messages, append, isLoading } = useChat({
-    api: "/api/sermon",
-  })
+  const generateSermon = async () => {
+    if (!scripture.trim()) return
 
-  const generateSermon = () => {
+    setIsLoading(true)
+    setError("")
+
     const prompt = `Generate a ${duration}-minute ${sermonType} sermon outline based on ${scripture}. 
     Theme: ${theme || "Let the Scripture guide the theme"}
     Target audience: ${audience}
@@ -33,14 +36,53 @@ export function SermonBuilder() {
     5. Conclusion with call to action
     6. Discussion questions for small groups`
 
-    append({ role: "user", content: prompt })
+    try {
+      const response = await fetch("/api/sermon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }]
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to generate sermon")
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let result = ""
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          // Parse the streaming response - extract text from data chunks
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              // Extract the text content from the stream format
+              const content = line.slice(2).trim()
+              if (content.startsWith('"') && content.endsWith('"')) {
+                result += JSON.parse(content)
+              }
+            }
+          }
+          setGeneratedSermon(result)
+        }
+      }
+    } catch (err) {
+      setError("Failed to generate sermon. Please check your API key and try again.")
+      console.error("Sermon generation error:", err)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
-
-  const lastAssistantMessage = messages.filter((m) => m.role === "assistant").pop()
 
   return (
     <div className="p-4 md:p-8">
@@ -117,14 +159,14 @@ export function SermonBuilder() {
                 <SelectContent>
                   <SelectItem value="general">General Congregation</SelectItem>
                   <SelectItem value="youth">Youth Group</SelectItem>
-                  <SelectItem value="men">Men's Ministry</SelectItem>
-                  <SelectItem value="women">Women's Ministry</SelectItem>
+                  <SelectItem value="men">Men&apos;s Ministry</SelectItem>
+                  <SelectItem value="women">Women&apos;s Ministry</SelectItem>
                   <SelectItem value="seekers">Seekers/New Believers</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <Button className="w-full" onClick={generateSermon} disabled={!scripture || isLoading}>
+            <Button className="w-full" onClick={generateSermon} disabled={!scripture.trim() || isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -137,6 +179,10 @@ export function SermonBuilder() {
                 </>
               )}
             </Button>
+
+            {error && (
+              <p className="text-sm text-destructive text-center">{error}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -147,9 +193,9 @@ export function SermonBuilder() {
                 <CardTitle className="text-foreground">Generated Sermon</CardTitle>
                 <CardDescription>Your AI-generated sermon outline</CardDescription>
               </div>
-              {lastAssistantMessage && (
+              {generatedSermon && (
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(lastAssistantMessage.content)}>
+                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(generatedSermon)}>
                     <Copy className="w-4 h-4 mr-1" />
                     Copy
                   </Button>
@@ -167,10 +213,10 @@ export function SermonBuilder() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
                 <p className="text-muted-foreground">Crafting your sermon...</p>
               </div>
-            ) : lastAssistantMessage ? (
+            ) : generatedSermon ? (
               <div className="prose prose-sm max-w-none">
                 <div className="whitespace-pre-wrap text-foreground leading-relaxed">
-                  {lastAssistantMessage.content}
+                  {generatedSermon}
                 </div>
               </div>
             ) : (

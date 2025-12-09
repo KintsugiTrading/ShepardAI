@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useChat } from "@ai-sdk/react"
 import { Loader2, Plus, Trash2, GripVertical, Sparkles, Music } from "lucide-react"
 
 interface Song {
@@ -21,10 +20,9 @@ export function WorshipSetCreator() {
   const [newSong, setNewSong] = useState({ title: "", artist: "", key: "C" })
   const [sermonTheme, setSermonTheme] = useState("")
   const [worshipStyle, setWorshipStyle] = useState("contemporary")
-
-  const { messages, append, isLoading } = useChat({
-    api: "/api/worship",
-  })
+  const [isLoading, setIsLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState("")
+  const [error, setError] = useState("")
 
   const addSong = () => {
     if (newSong.title) {
@@ -37,7 +35,12 @@ export function WorshipSetCreator() {
     setSongs(songs.filter((s) => s.id !== id))
   }
 
-  const generateSuggestions = () => {
+  const generateSuggestions = async () => {
+    if (!sermonTheme.trim()) return
+
+    setIsLoading(true)
+    setError("")
+
     const currentSongs = songs.map((s) => s.title).join(", ")
     const prompt = `I'm planning a ${worshipStyle} worship set for a sermon about "${sermonTheme}".
     ${currentSongs ? `I already have these songs: ${currentSongs}.` : ""}
@@ -49,10 +52,47 @@ export function WorshipSetCreator() {
     4. Scripture readings that could be interspersed
     5. Any special musical moments or arrangements`
 
-    append({ role: "user", content: prompt })
-  }
+    try {
+      const response = await fetch("/api/worship", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }]
+        }),
+      })
 
-  const lastAssistantMessage = messages.filter((m) => m.role === "assistant").pop()
+      if (!response.ok) {
+        throw new Error("Failed to generate suggestions")
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let result = ""
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              const content = line.slice(2).trim()
+              if (content.startsWith('"') && content.endsWith('"')) {
+                result += JSON.parse(content)
+              }
+            }
+          }
+          setSuggestions(result)
+        }
+      }
+    } catch (err) {
+      setError("Failed to generate suggestions. Please check your API key and try again.")
+      console.error("Worship suggestions error:", err)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className="p-4 md:p-8">
@@ -157,7 +197,7 @@ export function WorshipSetCreator() {
                 </p>
               )}
 
-              <Button className="w-full" onClick={generateSuggestions} disabled={!sermonTheme || isLoading}>
+              <Button className="w-full" onClick={generateSuggestions} disabled={!sermonTheme.trim() || isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -170,6 +210,10 @@ export function WorshipSetCreator() {
                   </>
                 )}
               </Button>
+
+              {error && (
+                <p className="text-sm text-destructive text-center">{error}</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -188,11 +232,11 @@ export function WorshipSetCreator() {
                 <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
                 <p className="text-muted-foreground">Finding the perfect songs...</p>
               </div>
-            ) : lastAssistantMessage ? (
-              <div className="whitespace-pre-wrap text-foreground leading-relaxed">{lastAssistantMessage.content}</div>
+            ) : suggestions ? (
+              <div className="whitespace-pre-wrap text-foreground leading-relaxed">{suggestions}</div>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
-                <p>Enter a sermon theme and click "Get AI Suggestions" for worship set recommendations.</p>
+                <p>Enter a sermon theme and click &quot;Get AI Suggestions&quot; for worship set recommendations.</p>
               </div>
             )}
           </CardContent>
