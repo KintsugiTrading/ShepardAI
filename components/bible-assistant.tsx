@@ -64,43 +64,20 @@ export function BibleAssistant() {
         }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error("Failed to get response")
+        throw new Error(data.error || "Failed to get response")
       }
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let result = ""
-      const assistantMessageId = (Date.now() + 1).toString()
-
-      // Add empty assistant message that we'll update
       setMessages((prev) => [
         ...prev,
-        { id: assistantMessageId, role: "assistant", content: "" },
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: data.content,
+        },
       ])
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              const content = line.slice(2).trim()
-              if (content.startsWith('"') && content.endsWith('"')) {
-                result += JSON.parse(content)
-              }
-            }
-          }
-          // Update the assistant message with streamed content
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessageId ? { ...m, content: result } : m
-            )
-          )
-        }
-      }
     } catch (err) {
       console.error("Bible assistant error:", err)
       setMessages((prev) => [
@@ -108,7 +85,7 @@ export function BibleAssistant() {
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Sorry, I encountered an error. Please check your API key and try again.",
+          content: `Sorry, I encountered an error: ${err instanceof Error ? err.message : "Unknown error"}. Please check your API key and try again.`,
         },
       ])
     } finally {
@@ -176,7 +153,7 @@ export function BibleAssistant() {
                       )}
                     </div>
                   ))}
-                  {isLoading && messages[messages.length - 1]?.role === "user" && (
+                  {isLoading && (
                     <div className="flex gap-3">
                       <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
                         <BookOpen className="w-4 h-4 text-primary-foreground" />

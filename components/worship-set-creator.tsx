@@ -40,6 +40,7 @@ export function WorshipSetCreator() {
 
     setIsLoading(true)
     setError("")
+    setSuggestions("")
 
     const currentSongs = songs.map((s) => s.title).join(", ")
     const prompt = `I'm planning a ${worshipStyle} worship set for a sermon about "${sermonTheme}".
@@ -61,33 +62,15 @@ export function WorshipSetCreator() {
         }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error("Failed to generate suggestions")
+        throw new Error(data.error || "Failed to generate suggestions")
       }
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let result = ""
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              const content = line.slice(2).trim()
-              if (content.startsWith('"') && content.endsWith('"')) {
-                result += JSON.parse(content)
-              }
-            }
-          }
-          setSuggestions(result)
-        }
-      }
+      setSuggestions(data.content)
     } catch (err) {
-      setError("Failed to generate suggestions. Please check your API key and try again.")
+      setError(err instanceof Error ? err.message : "Failed to generate suggestions. Please try again.")
       console.error("Worship suggestions error:", err)
     } finally {
       setIsLoading(false)

@@ -1,11 +1,11 @@
 import { google } from "@ai-sdk/google"
-import { streamText } from "ai"
+import { generateText } from "ai"
 
 export async function POST(req: Request) {
   try {
     const { messages } = await req.json()
 
-    const result = await streamText({
+    const { text } = await generateText({
       model: google("gemini-1.5-flash"),
       system: `You are an experienced worship leader and music director with extensive knowledge 
       of Christian worship music across all genres - contemporary, traditional hymns, gospel, 
@@ -15,7 +15,10 @@ export async function POST(req: Request) {
       messages,
     })
 
-    return result.toDataStreamResponse()
+    return new Response(JSON.stringify({ content: text }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
   } catch (error) {
     console.error("Worship API Error:", error)
     return new Response(JSON.stringify({ error: String(error) }), {

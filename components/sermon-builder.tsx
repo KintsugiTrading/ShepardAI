@@ -23,6 +23,7 @@ export function SermonBuilder() {
 
     setIsLoading(true)
     setError("")
+    setGeneratedSermon("")
 
     const prompt = `Generate a ${duration}-minute ${sermonType} sermon outline based on ${scripture}. 
     Theme: ${theme || "Let the Scripture guide the theme"}
@@ -45,35 +46,15 @@ export function SermonBuilder() {
         }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error("Failed to generate sermon")
+        throw new Error(data.error || "Failed to generate sermon")
       }
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let result = ""
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = decoder.decode(value, { stream: true })
-          // Parse the streaming response - extract text from data chunks
-          const lines = chunk.split('\n')
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              // Extract the text content from the stream format
-              const content = line.slice(2).trim()
-              if (content.startsWith('"') && content.endsWith('"')) {
-                result += JSON.parse(content)
-              }
-            }
-          }
-          setGeneratedSermon(result)
-        }
-      }
+      setGeneratedSermon(data.content)
     } catch (err) {
-      setError("Failed to generate sermon. Please check your API key and try again.")
+      setError(err instanceof Error ? err.message : "Failed to generate sermon. Please try again.")
       console.error("Sermon generation error:", err)
     } finally {
       setIsLoading(false)
